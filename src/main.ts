@@ -23,8 +23,18 @@ interface ShapedData {
 	}>;
 }
 
+const RESOLVERS = Object.freeze({
+	'lookup.zone': 'https://dja.lookup.zone/dns-query',
+	cloudflare: 'https://1.1.1.1/dns-query',
+	google: 'https://dns.google/dns-query',
+});
+
 function isSupportedRecordType(type: any): type is RecordType {
 	return ['A', 'AAAA', 'CNAME'].includes(type?.toUpperCase());
+}
+
+function isValidResolver(thing: any): thing is keyof typeof RESOLVERS {
+	return Object.keys(RESOLVERS).includes(thing);
 }
 
 Deno.serve(async (request) => {
@@ -32,17 +42,23 @@ Deno.serve(async (request) => {
 
 	const name = url.searchParams.get('name');
 
-	if (!name) {
+	if (typeof name != 'string') {
 		return new Response('missing name param', { status: 400 });
+	}
+
+	const resolver = url.searchParams.get('resolver') || 'lookup.zone';
+
+	if (!isValidResolver(resolver)) {
+		return new Response('invalid resolver', { status: 400 });
 	}
 
 	const type = url.searchParams.get('type') || 'A';
 
 	if (!isSupportedRecordType(type)) {
-		return new Response('missing type param', { status: 400 });
+		return new Response('type must be A, AAAA, or CNAME', { status: 400 });
 	}
 
-	const response = await fetch('https://wsys.lookup.zone/dns-query', {
+	const response = await fetch(RESOLVERS[resolver], {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/dns-message',
