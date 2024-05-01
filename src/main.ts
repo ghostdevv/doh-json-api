@@ -1,8 +1,8 @@
+// @deno-types="npm:@types/dns-packet"
+import packet, { type RecordType } from 'npm:dns-packet';
 import * as recordType from './types.ts';
 // @deno-types="npm:@types/node"
 import { Buffer } from 'node:buffer';
-// @deno-types="npm:@types/dns-packet"
-import packet from 'npm:dns-packet';
 
 interface ShapedData {
 	Status: number;
@@ -23,14 +23,24 @@ interface ShapedData {
 	}>;
 }
 
+function isSupportedRecordType(type: any): type is RecordType {
+	return ['A', 'AAAA', 'CNAME'].includes(type?.toUpperCase());
+}
+
 Deno.serve(async (request) => {
 	const url = new URL(request.url);
 
 	const name = url.searchParams.get('name');
-	if (!name) return new Response('missing name param', { status: 400 });
+
+	if (!name) {
+		return new Response('missing name param', { status: 400 });
+	}
 
 	const type = url.searchParams.get('type') || 'A';
-	if (!type) return new Response('missing type param', { status: 400 });
+
+	if (!isSupportedRecordType(type)) {
+		return new Response('missing type param', { status: 400 });
+	}
 
 	const response = await fetch('https://wsys.lookup.zone/dns-query', {
 		method: 'POST',
@@ -41,12 +51,7 @@ Deno.serve(async (request) => {
 			type: 'query',
 			id: Math.floor(Math.random() * 65534) + 1,
 			flags: packet.RECURSION_DESIRED,
-			questions: [
-				{
-					type: type as any,
-					name,
-				},
-			],
+			questions: [{ type, name }],
 		}),
 	});
 
@@ -66,8 +71,8 @@ Deno.serve(async (request) => {
 		Answer: (data.answers || [])?.map((a) => ({
 			name: a.name,
 			type: recordType.fromStr(a.type),
-			TTL: (a as any).ttl,
-			data: (a as any).data,
+			TTL: (a as any)?.ttl,
+			data: (a as any)?.data,
 		})),
 	} satisfies ShapedData);
 });
