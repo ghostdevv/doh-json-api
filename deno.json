@@ -9,5 +9,12 @@
         "useTabs": true,
         "indentWidth": 4,
         "lineWidth": 100
+    },
+    "lint": {
+        "rules": {
+            "exclude": [
+                "no-explicit-any"
+            ]
+        }
     }
 }

@@ -1,30 +1,9 @@
 // @deno-types="npm:@types/dns-packet"
 import packet, { type RecordType } from 'npm:dns-packet';
-import * as recordType from './types.ts';
 // @deno-types="npm:@types/node"
 import { Buffer } from 'node:buffer';
 
-interface ShapedData {
-	Status: number;
-	TC: boolean;
-	RD: boolean;
-	RA: boolean;
-	AD: boolean;
-	CD: boolean;
-	Question: Array<{
-		name: string;
-		type: number;
-	}>;
-	Answer: Array<{
-		name: string;
-		type: number;
-		TTL: number;
-		data: string;
-	}>;
-}
-
 const RESOLVERS = Object.freeze({
-	'lookup.zone': 'https://dja.lookup.zone/dns-query',
 	cloudflare: 'https://1.1.1.1/dns-query',
 	google: 'https://dns.google/dns-query',
 });
@@ -42,11 +21,11 @@ Deno.serve(async (request) => {
 
 	const name = url.searchParams.get('name');
 
-	if (typeof name != 'string') {
-		return new Response('missing name param', { status: 400 });
+	if (!name || name?.trim().length == 0) {
+		return new Response('invalid/missing name param', { status: 400 });
 	}
 
-	const resolver = url.searchParams.get('resolver') || 'lookup.zone';
+	const resolver = url.searchParams.get('resolver') || 'cloudflare';
 
 	if (!isValidResolver(resolver)) {
 		return new Response('invalid resolver', { status: 400 });
@@ -74,21 +53,17 @@ Deno.serve(async (request) => {
 	const data = packet.decode(Buffer.from(await response.arrayBuffer()));
 
 	return Response.json({
-		Status: 0, // todo
-		TC: data.flag_tc,
-		RD: data.flag_rd,
-		RA: data.flag_ra,
-		AD: data.flag_ad,
-		CD: data.flag_cd,
-		Question: (data.questions || [])?.map((q) => ({
-			name: q.name,
-			type: recordType.fromStr(q.type),
-		})),
-		Answer: (data.answers || [])?.map((a) => ({
-			name: a.name,
-			type: recordType.fromStr(a.type),
-			TTL: (a as any)?.ttl,
-			data: (a as any)?.data,
-		})),
-	} satisfies ShapedData);
+		status: 'rcode' in data ? data.rcode : null,
+		flags: {
+			tc: data.flag_tc,
+			rd: data.flag_rd,
+			ra: data.flag_ra,
+			ad: data.flag_ad,
+			cd: data.flag_cd,
+		},
+		questions: data.questions || null,
+		answers: data.answers || null,
+		authorities: data.authorities || null,
+		additionals: data.additionals || null,
+	});
 });
